@@ -1,8 +1,9 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, send_file
 import requests
 import pandas as pd
 import json
 import yfinance as yf
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -67,6 +68,24 @@ def show_stock(symbol):
         chart_data=json.dumps(chart_data),
         chart_ohlc=json.dumps(chart_ohlc),
         yahoo=yahoo
+    )
+
+@app.route('/stock/<symbol>/export')
+def export_stock(symbol):
+    result = fetch_stock_data(symbol)
+    if result is None:
+        return "Không lấy được dữ liệu từ CafeF"
+
+    df, _, _, _ = result
+    output = BytesIO()
+    df.to_excel(output, index=False, engine='openpyxl')
+    output.seek(0)
+
+    return send_file(
+        output,
+        download_name=f"{symbol.upper()}_stock_data.xlsx",
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
 if __name__ == '__main__':
