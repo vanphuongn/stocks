@@ -57,7 +57,7 @@ def fetch_yahoo_quote(symbol):
 def show_stock(symbol):
     result = fetch_stock_data(symbol)
     if result is None:
-        return "Không lấy được dữ liệu từ CafeF"
+        return "Không lấy được dữ liệu "
 
     df, chart_labels, chart_data, chart_ohlc = result
     yahoo = fetch_yahoo_quote(symbol.upper())
@@ -75,7 +75,7 @@ def show_stock(symbol):
 def export_stock(symbol):
     result = fetch_stock_data(symbol)
     if result is None:
-        return "Không lấy được dữ liệu từ CafeF"
+        return "Không lấy được dữ liệu "
 
     df, _, _, _ = result
     output = BytesIO()
