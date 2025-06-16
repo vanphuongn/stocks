@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bảng giá {{ symbol }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bootstrap & DataTables CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+
+  <!-- Chart.js & Plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@3.3.0/dist/chartjs-chart-financial.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+
+  <!-- jQuery & DataTables -->
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+</head>
+<body class="p-4">
+  <div class="container">
+    <h2 class="mb-4">Bảng giá cổ phiếu {{ symbol }}</h2>
+
+    <!-- Yahoo Finance Price -->
+    {% if yahoo.current_price %}
+    <div class="alert alert-info">
+      <strong>Giá hiện tại:</strong> {{ yahoo.current_price }} {{ yahoo.currency }}<br>
+      <strong>Thay đổi:</strong>
+      <span style="color: {% if yahoo.change > 0 %}green{% elif yahoo.change < 0 %}red{% else %}gray{% endif %};">
+        {{ yahoo.change }} ({{ yahoo.change_percent|round(2) }}%)
+      </span>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">Không lấy được giá hiện tại từ Yahoo Finance.</div>
+    {% endif %}
+
+    <!-- Chart Type Buttons -->
+    <div class="mb-2">
+      <label>Loại biểu đồ:</label>
+      <button class="btn btn-outline-success btn-sm" onclick="setChartType('line')">Đường</button>
+      <button class="btn btn-outline-danger btn-sm" onclick="setChartType('candlestick')">Nến</button>
+    </div>
+
+    <!-- Time Range Buttons -->
+    <div class="mb-3">
+      <label>Thời gian:</label>
+      <button class="btn btn-outline-primary btn-sm" onclick="updateChart('1W')">1W</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="updateChart('1M')">1M</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="updateChart('3M')">3M</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="updateChart('ALL')">ALL</button>
+    </div>
+
+    <!-- Chart Canvas -->
+    <canvas id="priceChart" height="100"></canvas>
+
+    <!-- Price Table -->
+    <table id="priceTable" class="table table-bordered table-striped mt-4">
+      <thead class="table-dark">
+        <tr>
+          <th>Ngày</th>
+          <th>Giá mở cửa</th>
+          <th>Giá cao nhất</th>
+          <th>Giá thấp nhất</th>
+          <th>Giá đóng cửa</th>
+          <th>Khối lượng</th>
+          <th>TB 5 phiên</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table %}
+        <tr>
+          <td>{{ row.Date }}</td>
+          <td>{{ row.Open }}</td>
+          <td>{{ row.High }}</td>
+          <td>{{ row.Low }}</td>
+          <td>{{ row.Close }}</td>
+          <td>{{ "{:,}".format(row.Volume) }}</td>
+          <td>{{ row.Avg5 if row.Avg5 == row.Avg5 else "-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Chart Data -->
+  <script>
+    const labelsAll = {{ chart_labels | safe }};
+    const dataAll = {{ chart_data | safe }};
+    const ohlcAll = {{ chart_ohlc | safe }};
+  </script>
+
+  <!-- Chart Script -->
+  <script>
+    let currentType = 'line';
+    let currentRange = '3M';
+    const ctx = document.getElementById('priceChart').getContext('2d');
+
+    const priceChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets: [] },
+      options: {
+        responsive: true,
+        scales: {
+          x: { type: 'category' },
+          y: { beginAtZero: false }
+        },
+        plugins: { legend: { display: true } }
+      }
+    });
+
+    function setChartType(type) {
+      currentType = type;
+      updateChart(currentRange);
+    }
+
+    function updateChart(range) {
+      currentRange = range;
+      const rangeMap = {
+        '1W': 7,
+        '1M': 22,
+        '3M': 66,
+        'ALL': labelsAll.length
+      };
+      const count = rangeMap[range] || labelsAll.length;
+      const labels = labelsAll.slice(-count);
+      const closes = dataAll.slice(-count);
+      const ohlc = ohlcAll.slice(-count);
+
+      if (currentType === 'line') {
+        priceChart.config.type = 'line';
+        priceChart.data.labels = labels;
+        priceChart.data.datasets = [{
+          label: 'Giá đóng cửa',
+          data: closes,
+          borderColor: '#42a5f5',
+          borderWidth: 2,
+          tension: 0.1,
+          fill: false
+        }];
+        priceChart.options.scales.x.type = 'category';
+      } else {
+        priceChart.config.type = 'candlestick';
+        priceChart.data.labels = [];
+        priceChart.data.datasets = [{
+          label: 'Nến giá',
+          data: ohlc,
+          color: {
+            up: '#00e676',
+            down: '#ff3d00',
+            unchanged: '#999'
+          }
+        }];
+        priceChart.options.scales.x = {
+          type: 'time',
+          time: {
+            unit: 'day',
+            tooltipFormat: 'yyyy-MM-dd'
+          }
+        };
+      }
+      priceChart.update();
+    }
+
+    $(document).ready(function () {
+      $('#priceTable').DataTable({
+        pageLength: 10,
+        lengthMenu: [5, 10, 25, 50, 100, -1],
+        language: {
+          lengthMenu: "Hiển thị _MENU_ dòng mỗi trang",
+          zeroRecords: "Không có dữ liệu",
+          info: "Trang _PAGE_ / _PAGES_",
+          infoEmpty: "Không có dữ liệu phù hợp",
+          infoFiltered: "(lọc từ _MAX_ dòng)",
+          search: "Tìm kiếm:",
+          paginate: {
+            first: "Đầu",
+            last: "Cuối",
+            next: "Sau",
+            previous: "Trước"
+          }
+        }
+      });
+
+      updateChart('3M');
+    });
+  </script>
+</body>
+</html>
